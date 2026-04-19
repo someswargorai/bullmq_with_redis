@@ -9,6 +9,7 @@ const fs = require('fs/promises');
 const multer = require("multer");
 const { PDFParse } = require("pdf-parse");
 const addEmailJob = require("./queue/producer.js");
+const redis = require('./config/redis_connection.js');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -30,6 +31,14 @@ const llm = new ChatGoogleGenerativeAI({
     apiKey: "AIzaSyAgikG8bxlOJpFR_xJhfviFtiQ-OecCWa0",
 });
 
+
+redis.on("connect", () => {
+    console.log("Redis connected");
+})
+
+redis.on("error", (err) => {
+    console.log("Redis error", err);
+})
 
 app.use(express.json());
 
@@ -61,18 +70,18 @@ app.post("/file", upload.array("infoFile", 10), async (req, response) => {
             }
         }
 
-        // const messages = [
-        //     new SystemMessage("You are a helpful assistant who replies in bullet points only."),
-        //     new HumanMessage(`Here is the content of file ${content}. Tell me is it optimized or not?`),
-        // ];
-        // const res = await llm.stream(messages);
+        const messages = [
+            new SystemMessage("You are a helpful assistant who replies in bullet points only."),
+            new HumanMessage(`Here is the content of file ${content}. Tell me is it optimized or not?`),
+        ];
+        const res = await llm.stream(messages);
 
-        // for await (let chunk of res) {
-        //     console.log(chunk.content); 
+        for await (let chunk of res) {
+            console.log(chunk.content); 
 
-        // }
+        }
 
-        // await fs.unlink(req.file.path);
+        await fs.unlink(req.file.path);
         response.status(200).json({ message: "File processed successfully" });
     } catch (err) {
         console.log(err);
@@ -110,7 +119,17 @@ app.post("/send-email", async (req, res) => {
 });
 
 
+app.post("/redis-stream-add", async(req,res)=>{
+    try{
+        const {message} = req.body;
+        await redis.xadd('message', 'MAXLEN', '~', 1000, "*", "text", message);
+        res.status(200).json({ message: "Message added successfully" });
 
+    }catch(err){
+        console.log(err);
+        res.status(500).json({ error: err.message });
+    }
+})
 
 app.listen(3000, () => {
     console.log('app is listening on 3000')
