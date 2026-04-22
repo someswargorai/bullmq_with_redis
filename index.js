@@ -10,6 +10,9 @@ const multer = require("multer");
 const { PDFParse } = require("pdf-parse");
 const addEmailJob = require("./queue/producer.js");
 const redis = require('./config/redis_connection.js');
+const { ConnectRabbitMQ, publishToQueue } = require("./config/rabbitmq.js");
+const { connectRabbitMQHeaders, producer } = require("./rabbit_mq_header_producer/producer.js");
+
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -31,6 +34,9 @@ const llm = new ChatGoogleGenerativeAI({
     apiKey: "AIzaSyAgikG8bxlOJpFR_xJhfviFtiQ-OecCWa0",
 });
 
+
+ConnectRabbitMQ();
+connectRabbitMQHeaders();
 
 redis.on("connect", () => {
     console.log("Redis connected");
@@ -77,7 +83,7 @@ app.post("/file", upload.array("infoFile", 10), async (req, response) => {
         const res = await llm.stream(messages);
 
         for await (let chunk of res) {
-            console.log(chunk.content); 
+            console.log(chunk.content);
 
         }
 
@@ -109,26 +115,47 @@ app.get("/", async (req, res) => {
 
 
 app.post("/send-email", async (req, res) => {
-  const { to, subject } = req.body;
+    const { to, subject } = req.body;
 
-  await addEmailJob({ to, subject });
+    await addEmailJob({ to, subject });
 
-  res.json({
-    message: "Email job queued successfully",
-  });
+    res.json({
+        message: "Email job queued successfully",
+    });
 });
 
 
-app.post("/redis-stream-add", async(req,res)=>{
-    try{
-        const {message} = req.body;
+app.post("/redis-stream-add", async (req, res) => {
+    try {
+        const { message } = req.body;
         await redis.xadd('message', 'MAXLEN', '~', 1000, "*", "text", message);
         res.status(200).json({ message: "Message added successfully" });
 
-    }catch(err){
+    } catch (err) {
         console.log(err);
         res.status(500).json({ error: err.message });
     }
+})
+
+app.post("/rabbitMq-send-mail", async (req, res) => {
+    try {
+        const { to, subject } = req.body;
+        publishToQueue({ to, subject });
+        res.status(200).json({ message: "Email queued successfully" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+
+})
+
+app.post("/rabbitMq-send-mail-headers", async (req, res) => {
+    try {
+        producer({ "x-match": "all", "notification-type": "email", "content-type": "text" }, { "to": "someswar@klizos.com", "subject": "Test Email" });
+        res.status(200).json({ message: "Email queued successfully" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+
 })
 
 app.listen(3000, () => {

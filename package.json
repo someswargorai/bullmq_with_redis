@@ -8,7 +8,10 @@
     "worker": "node --watch queue/consumer.js",
     "producer": "node --watch queue/producer.js",
     "redis-consumer": "node --watch redis/consumer.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "rabbitMq-consumer": "node --watch rabbitMq/consumer.js",
+    "rabbitMq-header-consumer": "node --watch rabbitMq/header_consumer.js"
+    
   },
   "author": "",
   "license": "ISC",
@@ -16,6 +19,7 @@
   "dependencies": {
     "@langchain/core": "^1.1.40",
     "@langchain/google-genai": "^2.1.27",
+    "amqplib": "^1.0.3",
     "bullmq": "^5.74.1",
     "express": "^5.2.1",
     "ioredis": "^5.10.1",
